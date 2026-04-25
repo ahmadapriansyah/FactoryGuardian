@@ -1,15 +1,16 @@
 import streamlit as st
-import cv2
 import numpy as np
 import time
 import pandas as pd
 from st_supabase_connection import SupabaseConnection
 from fpdf import FPDF
 from datetime import datetime
+import cv2 # Tetap di-import biar gak error sama file requirements.txt lu
 
 # --- UI SETTINGS ---
 st.set_page_config(page_title="FactoryGuard AI Pro Cloud", layout="wide")
 
+# --- KONEKSI SUPABASE ---
 conn = st.connection("supabase", type=SupabaseConnection)
 
 # --- FUNGSI ANALITIK & PERHITUNGAN ---
@@ -24,7 +25,7 @@ def estimasi_biaya(listrik, solar):
     return (listrik * 1500) + (solar * 13000)
 
 def export_to_pdf(data, title):
-    pdf = FPDF(orientation='L') # Landscape biar lebar
+    pdf = FPDF(orientation='L')
     pdf.add_page()
     pdf.set_font("Arial", 'B', 14)
     
@@ -139,7 +140,6 @@ if menu == "Dashboard Performance":
     c1, c2 = st.columns(2)
     with c1:
         st.subheader("🏭 ESG Offset Monitor")
-        # Logika Saran Emisi yang Masuk Akal
         if total_co2 > 100:
             st.warning("⚠️ **Peringatan Emisi Tinggi!** \nSaran Sistem: Optimalkan penggunaan genset solar dan jadwalkan maintenance mesin pabrik untuk efisiensi pembakaran.")
         else:
@@ -158,6 +158,7 @@ if menu == "Dashboard Performance":
             st.info(f"🔮 **Prediksi CO2 Besok:** {last_val * 1.05:.2f} kg \n*(Menggunakan Simulasi Worst-Case Kenaikan 5% dari hari terakhir)*")
         else:
             st.info("Belum ada data emisi untuk prediksi.")
+
 # --- 2. ABSENSI & FIT CHECK ---
 elif menu == "Absensi & Fit Check":
     st.title("❤️ Presensi & Health Scan")
@@ -244,6 +245,7 @@ elif menu == "Absensi & Fit Check":
                             st.error("Belum Check-In hari ini atau sudah Check-Out!")
         else:
             st.session_state.scan_selesai = False
+
 # --- 3. ECO MONITORING ---
 elif menu == "Eco Monitoring":
     st.title("🌿 Input Data Lingkungan")
@@ -260,7 +262,7 @@ elif menu == "Eco Monitoring":
             conn.table("emisi").upsert([data_eco]).execute()
             st.success(f"Tercatat: {tot:.2f} kg CO2 | Estimasi Biaya: Rp {biaya:,.0f}")
 
-# --- 4. LAPORAN ABSENSI (TAMBAH DURASI SAJA) ---
+# --- 4. LAPORAN ABSENSI ---
 elif menu == "Laporan Absensi":
     st.title("📋 Laporan Presensi & Durasi")
     st.write("### 🔍 Filter Pencarian Data")
@@ -275,13 +277,11 @@ elif menu == "Laporan Absensi":
     df_absen = pd.DataFrame(absen_data) if absen_data else pd.DataFrame()
     
     if not df_absen.empty:
-        # Tambah Logika Hitung Durasi untuk Tabel
         df_absen['jam_masuk_dt'] = pd.to_datetime(df_absen['jam_masuk'], format='%H:%M:%S', errors='coerce')
         df_absen['jam_pulang_dt'] = pd.to_datetime(df_absen['jam_pulang'], format='%H:%M:%S', errors='coerce')
         df_absen['DURASI (JAM)'] = (df_absen['jam_pulang_dt'] - df_absen['jam_masuk_dt']).dt.total_seconds() / 3600
         df_absen['DURASI (JAM)'] = df_absen['DURASI (JAM)'].fillna(0).round(2)
         
-        # Bersihkan kolom bantu dan ID
         df_absen = df_absen.drop(columns=['jam_masuk_dt', 'jam_pulang_dt', 'id'], errors='ignore')
 
         st.write(f"Menampilkan data dari **{mulai_tgl}** hingga **{akhir_tgl}**")
