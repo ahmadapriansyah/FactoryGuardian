@@ -12,8 +12,6 @@ st.set_page_config(page_title="FactoryGuard AI Pro Cloud", layout="wide")
 
 conn = st.connection("supabase", type=SupabaseConnection)
 
-conn = st.connection("supabase", type=SupabaseConnection, url=SUPABASE_URL, key=SUPABASE_KEY)
-
 # --- FUNGSI ANALITIK & PERHITUNGAN ---
 def hitung_fatigue(bpm, jam_kerja):
     if jam_kerja > 8 and bpm > 100:
