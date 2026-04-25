@@ -158,7 +158,6 @@ if menu == "Dashboard Performance":
             st.info(f"🔮 **Prediksi CO2 Besok:** {last_val * 1.05:.2f} kg \n*(Menggunakan Simulasi Worst-Case Kenaikan 5% dari hari terakhir)*")
         else:
             st.info("Belum ada data emisi untuk prediksi.")
-
 # --- 2. ABSENSI & FIT CHECK ---
 elif menu == "Absensi & Fit Check":
     st.title("❤️ Presensi & Health Scan")
@@ -185,41 +184,15 @@ elif menu == "Absensi & Fit Check":
         st.write("---")
         aktifkan_kamera = st.checkbox("📸 Nyalakan Kamera untuk Scan HR")
         
-      if aktifkan_kamera:
+        if aktifkan_kamera:
             if not st.session_state.scan_selesai:
-                st.info("Posisikan wajah Anda di tengah kamera, lalu klik 'Take Photo'.")
+                st.info("Posisikan wajah Anda di tengah kamera, lalu klik tombol kamera (Take Photo).")
                 foto = st.camera_input("Scan Biometrik Wajah")
                 
                 if foto is not None:
-                    # Simulasi AI lagi nganalisa wajah & detak jantung
                     with st.spinner("🔄 Menganalisis Biometrik & Micro-vibration Wajah..."):
-                        time.sleep(2) # Loading 2 detik biar keliatan canggih
+                        time.sleep(2)
                     
-                    st.session_state.current_bpm = np.random.randint(70, 115)
-                    st.session_state.scan_selesai = True
-                    st.rerun()
-                else:
-                    start_time = time.time()
-                    while time.time() - start_time < 5:
-                        ret, frame = cap.read()
-                        if not ret: continue
-                        
-                        frame = cv2.flip(frame, 1)
-                        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                        h, w, _ = frame_rgb.shape
-                        cv2.rectangle(frame_rgb, (int(w*0.35), int(h*0.2)), (int(w*0.65), int(h*0.5)), (0, 255, 0), 2)
-                        
-                        sisa = int(5 - (time.time() - start_time)) + 1
-                        cv2.putText(frame_rgb, f"SCANNING HR... {sisa}s", (int(w*0.32), int(h*0.15)), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-                        
-                        live_bpm = np.random.randint(65, 120)
-                        cv2.putText(frame_rgb, f"LIVE BPM: {live_bpm}", (int(w*0.35), int(h*0.55)), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
-                        
-                        placeholder.image(frame_rgb, channels="RGB")
-                        time.sleep(0.05)
-                        
-                    cap.release()
-                    placeholder.empty()
                     st.session_state.current_bpm = np.random.randint(70, 115)
                     st.session_state.scan_selesai = True
                     st.rerun()
@@ -238,7 +211,7 @@ elif menu == "Absensi & Fit Check":
                             "tanggal": tgl_skrg, 
                             "jam_masuk": datetime.now().strftime("%H:%M:%S"), 
                             "bpm_masuk": st.session_state.current_bpm,
-                            "status_lelah": hitung_fatigue(st.session_state.current_bpm, 0) # Pas baru masuk jam kerja masih 0
+                            "status_lelah": hitung_fatigue(st.session_state.current_bpm, 0)
                         }
                         conn.table("absensi").insert([data_in]).execute()
                         st.session_state.scan_selesai = False
@@ -252,7 +225,6 @@ elif menu == "Absensi & Fit Check":
                             jam_masuk_str = cek[0]['jam_masuk']
                             jam_pulang_str = datetime.now().strftime("%H:%M:%S")
                             
-                            # Hitung durasi saat pulang untuk update status lelah
                             fmt = "%H:%M:%S"
                             t_masuk = datetime.strptime(jam_masuk_str, fmt)
                             t_pulang = datetime.strptime(jam_pulang_str, fmt)
@@ -272,7 +244,6 @@ elif menu == "Absensi & Fit Check":
                             st.error("Belum Check-In hari ini atau sudah Check-Out!")
         else:
             st.session_state.scan_selesai = False
-
 # --- 3. ECO MONITORING ---
 elif menu == "Eco Monitoring":
     st.title("🌿 Input Data Lingkungan")
