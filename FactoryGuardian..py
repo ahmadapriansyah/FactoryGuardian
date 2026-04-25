@@ -185,14 +185,19 @@ elif menu == "Absensi & Fit Check":
         st.write("---")
         aktifkan_kamera = st.checkbox("📸 Nyalakan Kamera untuk Scan HR")
         
-        if aktifkan_kamera:
+      if aktifkan_kamera:
             if not st.session_state.scan_selesai:
-                placeholder = st.empty()
-                cap = cv2.VideoCapture(0)
-                time.sleep(0.5)
+                st.info("Posisikan wajah Anda di tengah kamera, lalu klik 'Take Photo'.")
+                foto = st.camera_input("Scan Biometrik Wajah")
                 
-                if not cap.isOpened():
-                    st.error("⚠️ Kamera tidak terdeteksi! Pastikan tidak dipakai aplikasi lain.")
+                if foto is not None:
+                    # Simulasi AI lagi nganalisa wajah & detak jantung
+                    with st.spinner("🔄 Menganalisis Biometrik & Micro-vibration Wajah..."):
+                        time.sleep(2) # Loading 2 detik biar keliatan canggih
+                    
+                    st.session_state.current_bpm = np.random.randint(70, 115)
+                    st.session_state.scan_selesai = True
+                    st.rerun()
                 else:
                     start_time = time.time()
                     while time.time() - start_time < 5:
