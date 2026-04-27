@@ -5,12 +5,28 @@ import pandas as pd
 from st_supabase_connection import SupabaseConnection
 from fpdf import FPDF
 from datetime import datetime
-import cv2 # Tetap di-import biar gak error sama file requirements.txt lu
+import cv2 # Tetap di-import biar gak error sama file requirements.txt
 
-# --- UI SETTINGS ---
+# --- 1. UI SETTINGS & CUSTOM CSS (Biar Tampilan Kayak Pabrik Pro) ---
 st.set_page_config(page_title="FactoryGuard AI Pro Cloud", layout="wide")
 
-# --- KONEKSI SUPABASE ---
+st.markdown("""
+    <style>
+    .main {
+        background-color: #f5f7f9;
+    }
+    .stMetric {
+        background-color: #ffffff;
+        padding: 15px;
+        border-radius: 10px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        border-left: 5px solid #0052cc;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+# --- 2. KONEKSI SUPABASE ---
+# Pastikan lu udah masukin URL & KEY di Streamlit Cloud Secrets!
 conn = st.connection("supabase", type=SupabaseConnection)
 
 # --- FUNGSI ANALITIK & PERHITUNGAN ---
@@ -88,18 +104,20 @@ if st.sidebar.button("Logout", width="stretch"):
 if menu == "Dashboard Performance":
     st.title("🚀 Factory Executive Analytics")
     
-    try:
-        emisi_data = conn.table("emisi").select("*").execute().data
-        df_emisi = pd.DataFrame(emisi_data) if emisi_data else pd.DataFrame()
-        
-        absensi_data = conn.table("absensi").select("*").execute().data
-        df_absensi = pd.DataFrame(absensi_data) if absensi_data else pd.DataFrame()
+    # Tambahan Spinner biar loading kelihatan elegan
+    with st.spinner("🔄 Menarik data live dari server..."):
+        try:
+            emisi_data = conn.table("emisi").select("*").execute().data
+            df_emisi = pd.DataFrame(emisi_data) if emisi_data else pd.DataFrame()
+            
+            absensi_data = conn.table("absensi").select("*").execute().data
+            df_absensi = pd.DataFrame(absensi_data) if absensi_data else pd.DataFrame()
 
-        karyawan_data = conn.table("karyawan").select("*").execute().data
-        total_karyawan = len(karyawan_data) if karyawan_data else 0
-    except Exception as e:
-        st.error(f"Gagal memuat data: {e}")
-        df_emisi, df_absensi, total_karyawan = pd.DataFrame(), pd.DataFrame(), 0
+            karyawan_data = conn.table("karyawan").select("*").execute().data
+            total_karyawan = len(karyawan_data) if karyawan_data else 0 
+        except Exception as e:
+            st.error(f"Gagal memuat data: {e}")
+            df_emisi, df_absensi, total_karyawan = pd.DataFrame(), pd.DataFrame(), 0
 
     tgl_skrg = datetime.now().strftime("%Y-%m-%d")
     hadir_hari_ini = len(df_absensi[df_absensi['tanggal'] == tgl_skrg]) if not df_absensi.empty else 0
@@ -249,18 +267,37 @@ elif menu == "Absensi & Fit Check":
 # --- 3. ECO MONITORING ---
 elif menu == "Eco Monitoring":
     st.title("🌿 Input Data Lingkungan")
+    st.info("Sistem Otomatis: Jika Anda memasukkan data lebih dari sekali di hari yang sama, sistem akan mengganti (update) data lama dengan yang baru.")
+    
     with st.form("eco_form"):
         l = st.number_input("Konsumsi Listrik (kWh)", min_value=0.0)
         s = st.number_input("Konsumsi Solar (Liter)", min_value=0.0)
+        
         if st.form_submit_button("Simpan & Kalkulasi"):
-            tot = (l * 0.87) + (s * 2.31)
-            biaya = estimasi_biaya(l, s)
-            data_eco = {
-                "tanggal": datetime.now().strftime("%Y-%m-%d"),
-                "listrik": l, "solar": s, "total_co2": tot, "biaya_estimasi": biaya
-            }
-            conn.table("emisi").upsert([data_eco]).execute()
-            st.success(f"Tercatat: {tot:.2f} kg CO2 | Estimasi Biaya: Rp {biaya:,.0f}")
+            if l <= 0 and s <= 0:
+                st.warning("⚠️ Mohon masukkan angka konsumsi yang valid.")
+            else:
+                tot = (l * 0.87) + (s * 2.31)
+                biaya = estimasi_biaya(l, s)
+                tgl_hari_ini = datetime.now().strftime("%Y-%m-%d")
+                
+                data_eco = {
+                    "tanggal": tgl_hari_ini,
+                    "listrik": l, "solar": s, "total_co2": tot, "biaya_estimasi": biaya
+                }
+                
+                with st.spinner("Menyimpan ke database..."):
+                    # Logika Ganti Upsert (Lebih Aman)
+                    cek_data = conn.table("emisi").select("id").eq("tanggal", tgl_hari_ini).execute().data
+                    if cek_data:
+                        # Kalo data hari ini udah ada, UPDATE data tersebut
+                        id_emisi = cek_data[0]['id']
+                        conn.table("emisi").update(data_eco).eq("id", id_emisi).execute()
+                        st.success(f"✅ Data hari ini berhasil DIPERBARUI! (Total: {tot:.2f} kg CO2 | Rp {biaya:,.0f})")
+                    else:
+                        # Kalo data belum ada, INSERT baru
+                        conn.table("emisi").insert([data_eco]).execute()
+                        st.success(f"✅ Data BARU tercatat! (Total: {tot:.2f} kg CO2 | Rp {biaya:,.0f})")
 
 # --- 4. LAPORAN ABSENSI ---
 elif menu == "Laporan Absensi":
@@ -273,8 +310,9 @@ elif menu == "Laporan Absensi":
     with col2:
         akhir_tgl = st.date_input("Sampai Tanggal", pd.to_datetime(datetime.now().date()))
 
-    absen_data = conn.table("absensi").select("*").gte("tanggal", str(mulai_tgl)).lte("tanggal", str(akhir_tgl)).execute().data
-    df_absen = pd.DataFrame(absen_data) if absen_data else pd.DataFrame()
+    with st.spinner("Menarik data laporan..."):
+        absen_data = conn.table("absensi").select("*").gte("tanggal", str(mulai_tgl)).lte("tanggal", str(akhir_tgl)).execute().data
+        df_absen = pd.DataFrame(absen_data) if absen_data else pd.DataFrame()
     
     if not df_absen.empty:
         df_absen['jam_masuk_dt'] = pd.to_datetime(df_absen['jam_masuk'], format='%H:%M:%S', errors='coerce')
@@ -287,8 +325,14 @@ elif menu == "Laporan Absensi":
         st.write(f"Menampilkan data dari **{mulai_tgl}** hingga **{akhir_tgl}**")
         st.dataframe(df_absen, width="stretch")
         
-        pdf_bytes = export_to_pdf(df_absen, f"LAPORAN ABSENSI PABRIK ({mulai_tgl} sd {akhir_tgl})")
-        st.download_button(label="📥 Download PDF Absensi", data=pdf_bytes, file_name=f"Absensi_{mulai_tgl}_sd_{akhir_tgl}.pdf", mime="application/pdf")
+        c1, c2 = st.columns(2)
+        with c1:
+            pdf_bytes = export_to_pdf(df_absen, f"LAPORAN ABSENSI PABRIK ({mulai_tgl} sd {akhir_tgl})")
+            st.download_button(label="📄 Download PDF Absensi", data=pdf_bytes, file_name=f"Absensi_{mulai_tgl}_sd_{akhir_tgl}.pdf", mime="application/pdf")
+        with c2:
+            # Fitur Baru: Download CSV buat diolah di Excel
+            csv_absen = df_absen.to_csv(index=False).encode('utf-8')
+            st.download_button(label="📊 Download CSV (Excel)", data=csv_absen, file_name=f"Absensi_{mulai_tgl}_sd_{akhir_tgl}.csv", mime="text/csv")
     else:
         st.warning("Tidak ada data absensi pada rentang tanggal tersebut.")
 
@@ -302,16 +346,23 @@ elif menu == "Laporan Eco Monitoring":
     with col2:
         akhir_tgl_eco = st.date_input("Sampai Tanggal ", pd.to_datetime(datetime.now().date()))
 
-    eco_data = conn.table("emisi").select("*").gte("tanggal", str(mulai_tgl_eco)).lte("tanggal", str(akhir_tgl_eco)).execute().data
-    df_eco = pd.DataFrame(eco_data) if eco_data else pd.DataFrame()
-    
-    st.write(f"Menampilkan data dari **{mulai_tgl_eco}** hingga **{akhir_tgl_eco}**")
-    st.dataframe(df_eco, width="stretch")
+    with st.spinner("Menarik data emisi..."):
+        eco_data = conn.table("emisi").select("*").gte("tanggal", str(mulai_tgl_eco)).lte("tanggal", str(akhir_tgl_eco)).execute().data
+        df_eco = pd.DataFrame(eco_data) if eco_data else pd.DataFrame()
     
     if not df_eco.empty:
         df_eco = df_eco.drop(columns=['id'], errors='ignore')
         
-        pdf_bytes = export_to_pdf(df_eco, f"LAPORAN EMISI KARBON ({mulai_tgl_eco} sd {akhir_tgl_eco})")
-        st.download_button(label="📥 Download PDF Eco", data=pdf_bytes, file_name=f"Eco_{mulai_tgl_eco}_sd_{akhir_tgl_eco}.pdf", mime="application/pdf")
+        st.write(f"Menampilkan data dari **{mulai_tgl_eco}** hingga **{akhir_tgl_eco}**")
+        st.dataframe(df_eco, width="stretch")
+        
+        c1, c2 = st.columns(2)
+        with c1:
+            pdf_bytes = export_to_pdf(df_eco, f"LAPORAN EMISI KARBON ({mulai_tgl_eco} sd {akhir_tgl_eco})")
+            st.download_button(label="📄 Download PDF Eco", data=pdf_bytes, file_name=f"Eco_{mulai_tgl_eco}_sd_{akhir_tgl_eco}.pdf", mime="application/pdf")
+        with c2:
+            # Fitur Baru: Download CSV buat diolah di Excel
+            csv_eco = df_eco.to_csv(index=False).encode('utf-8')
+            st.download_button(label="📊 Download CSV (Excel)", data=csv_eco, file_name=f"Eco_{mulai_tgl_eco}_sd_{akhir_tgl_eco}.csv", mime="text/csv")
     else:
         st.warning("Tidak ada data emisi pada rentang tanggal tersebut.")
