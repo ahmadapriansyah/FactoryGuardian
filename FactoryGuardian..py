@@ -271,36 +271,46 @@ elif menu == "Eco Monitoring":
     st.title("🌿 Input Data Lingkungan")
     st.info("Sistem Otomatis: Jika Anda memasukkan data lebih dari sekali di hari yang sama, sistem akan mengganti (update) data lama dengan yang baru.")
     
-    with st.form("eco_form"):
-        l = st.number_input("Konsumsi Listrik (kWh)", min_value=0.0)
-        s = st.number_input("Konsumsi Solar (Liter)", min_value=0.0)
+    # --- FITUR PASSWORD KHUSUS ECO ---
+    st.write("---")
+    kunci_eco = st.text_input("🔑 Masukkan PIN Manager untuk membuka form:", type="password")
+    
+    # Cek apakah password benar (Misal PIN-nya: eco123)
+    if kunci_eco == "eco123":
+        st.success("Akses Terbuka!")
         
-        if st.form_submit_button("Simpan & Kalkulasi"):
-            if l <= 0 and s <= 0:
-                st.warning("⚠️ Mohon masukkan angka konsumsi yang valid.")
-            else:
-                tot = (l * 0.87) + (s * 2.31)
-                biaya = estimasi_biaya(l, s)
-                tgl_hari_ini = datetime.now().strftime("%Y-%m-%d")
-                
-                data_eco = {
-                    "tanggal": tgl_hari_ini,
-                    "listrik": l, "solar": s, "total_co2": tot, "biaya_estimasi": biaya
-                }
-                
-                with st.spinner("Menyimpan ke database..."):
-                    # Logika Ganti Upsert (Lebih Aman)
-                    cek_data = conn.table("emisi").select("id").eq("tanggal", tgl_hari_ini).execute().data
-                    if cek_data:
-                        # Kalo data hari ini udah ada, UPDATE data tersebut
-                        id_emisi = cek_data[0]['id']
-                        conn.table("emisi").update(data_eco).eq("id", id_emisi).execute()
-                        st.success(f"✅ Data hari ini berhasil DIPERBARUI! (Total: {tot:.2f} kg CO2 | Rp {biaya:,.0f})")
-                    else:
-                        # Kalo data belum ada, INSERT baru
-                        conn.table("emisi").insert([data_eco]).execute()
-                        st.success(f"✅ Data BARU tercatat! (Total: {tot:.2f} kg CO2 | Rp {biaya:,.0f})")
-
+        with st.form("eco_form"):
+            l = st.number_input("Konsumsi Listrik (kWh)", min_value=0.0)
+            s = st.number_input("Konsumsi Solar (Liter)", min_value=0.0)
+            
+            if st.form_submit_button("Simpan & Kalkulasi"):
+                if l <= 0 and s <= 0:
+                    st.warning("⚠️ Mohon masukkan angka konsumsi yang valid.")
+                else:
+                    tot = (l * 0.87) + (s * 2.31)
+                    biaya = estimasi_biaya(l, s)
+                    tgl_hari_ini = datetime.now().strftime("%Y-%m-%d")
+                    
+                    data_eco = {
+                        "tanggal": tgl_hari_ini,
+                        "listrik": l, "solar": s, "total_co2": tot, "biaya_estimasi": biaya
+                    }
+                    
+                    with st.spinner("Menyimpan ke database..."):
+                        # Logika Ganti Upsert (Lebih Aman)
+                        cek_data = conn.table("emisi").select("id").eq("tanggal", tgl_hari_ini).execute().data
+                        if cek_data:
+                            # Kalo data hari ini udah ada, UPDATE data tersebut
+                            id_emisi = cek_data[0]['id']
+                            conn.table("emisi").update(data_eco).eq("id", id_emisi).execute()
+                            st.success(f"✅ Data hari ini berhasil DIPERBARUI! (Total: {tot:.2f} kg CO2 | Rp {biaya:,.0f})")
+                        else:
+                            # Kalo data belum ada, INSERT baru
+                            conn.table("emisi").insert([data_eco]).execute()
+                            st.success(f"✅ Data BARU tercatat! (Total: {tot:.2f} kg CO2 | Rp {biaya:,.0f})")
+    
+    elif kunci_eco != "":
+        st.error("❌ PIN Salah! Anda tidak memiliki izin untuk menginput data.")
 # --- 4. LAPORAN ABSENSI ---
 elif menu == "Laporan Absensi":
     st.title("📋 Laporan Presensi & Durasi")
