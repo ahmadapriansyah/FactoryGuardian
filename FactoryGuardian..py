@@ -276,7 +276,7 @@ elif menu == "Eco Monitoring":
     kunci_eco = st.text_input("🔑 Masukkan PIN Manager untuk membuka form:", type="password")
     
     # Cek apakah password benar (Misal PIN-nya: eco123)
-    if kunci_eco == "eco123":
+    if kunci_eco == "ahmadganteng":
         st.success("Akses Terbuka!")
         
         with st.form("eco_form"):
