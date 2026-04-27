@@ -12,15 +12,17 @@ st.set_page_config(page_title="FactoryGuard AI Pro Cloud", layout="wide")
 
 st.markdown("""
     <style>
-    .main {
-        background-color: #f5f7f9;
-    }
-    .stMetric {
-        background-color: #ffffff;
+    /* Modifikasi kotak Metric */
+    [data-testid="stMetric"] {
+        background-color: #ffffff !important;
         padding: 15px;
         border-radius: 10px;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         border-left: 5px solid #0052cc;
+    }
+    /* Paksa semua tulisan di dalam kotak jadi warna hitam/gelap */
+    [data-testid="stMetric"] * {
+        color: #111827 !important; 
     }
     </style>
     """, unsafe_allow_html=True)
