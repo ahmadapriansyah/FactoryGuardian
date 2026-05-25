@@ -1,6 +1,7 @@
 streamlit
-pandas
+opencv-python-headless
 numpy
+pandas
 st-supabase-connection
 fpdf
-opencv-python-headless
+plotly
