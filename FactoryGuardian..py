@@ -1,12 +1,10 @@
-import streamlit as st
-import cv2
-import numpy as np
-import time
-import pandas as pd
-from st_supabase_connection import SupabaseConnection
-from fpdf import FPDF
-from datetime import datetime
-import plotly.express as px
+streamlit
+opencv-python-headless
+numpy
+pandas
+st-supabase-connection
+fpdf
+plotly
 
 # --- UI SETTINGS ---
 st.set_page_config(page_title="FactoryGuard AI Pro Cloud", layout="wide", initial_sidebar_state="expanded")
