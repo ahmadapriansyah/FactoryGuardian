@@ -2,6 +2,8 @@ streamlit
 opencv-python-headless
 numpy
 pandas
-st-supabase-connection
+supabase
 fpdf
-plotly
+python-dotenv
+twilio
+pygame
