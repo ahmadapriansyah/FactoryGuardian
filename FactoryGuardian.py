@@ -498,7 +498,7 @@ elif menu == "CCTV Safety Guard (AI)":
         # --- LOGIKA DETEKSI POSTUR ABNORMAL ---
         if simulasi_abnormal:
             color = (0, 165, 255) # Oranye
-            label = f"⚠️ ABNORMAL POSTURE (< {batas_tinggi}cm)!"
+           label = f"WARNING: ABNORMAL POSTURE (< {batas_tinggi}cm)!"
             status_k3 = f"🚨 PERHATIAN! Terdeteksi Pekerja Terjatuh di bawah {batas_tinggi}cm!"
             
             cv2.rectangle(frame, (int(w*0.2), int(h*0.7)), (int(w*0.8), int(h*0.9)), color, 3)
@@ -512,12 +512,11 @@ elif menu == "CCTV Safety Guard (AI)":
             if not st.session_state.ppe_logs or st.session_state.ppe_logs[0] != entry_log:
                 st.session_state.ppe_logs.insert(0, entry_log)
 
-            # --- BLOK EKSEKUSI KIRIM WHATSAPP (HANYA SEKALI) ---
+        # --- BLOK EKSEKUSI KIRIM WHATSAPP (HANYA SEKALI) ---
             if not st.session_state.wa_sent:
                 try:
-                    acc_sid = 'ACa3a95e23d643ee4279076c697d4da8f9'
-                    token = 'e928d4e626dc6cbb45c406cc4e94d94a'
-                    client = Client(acc_sid, token)
+                    # Langsung pakai variabel dari st.secrets di atas!
+                    client = Client(TWILIO_SID, TWILIO_TOKEN)
 
                     msg_body = f"🚨 *FACTORYGUARD ALERT* 🚨\n\nTerdeteksi Karyawan Terjatuh/Tidur (< {batas_tinggi}cm)!\nLokasi: {pilih_area}\nWaktu: {tgl_jam}\n\nSegera cek lokasi!"
 
