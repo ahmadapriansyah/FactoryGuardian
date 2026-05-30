@@ -10,9 +10,8 @@ from datetime import datetime
 from dotenv import load_dotenv
 from twilio.rest import Client
 
-# Matikan pesan welcome pygame di terminal biar bersih
-os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
-from pygame import mixer 
+# CATATAN BOLO: Pygame dihapus karena bikin crash di server cloud.
+# Untuk alarm suara, kita ganti pakai st.audio() bawaan Streamlit yang cloud-friendly.
 
 load_dotenv()
 
@@ -342,7 +341,6 @@ elif menu == "Eco Monitoring":
                 st.write("### 🏭 Data Pemantauan Udara & Energi")
                 l = st.number_input("Konsumsi Listrik (kWh)", min_value=0.0, value=def_l)
                 s = st.number_input("Konsumsi Solar (Liter)", min_value=0.0, value=def_s)
-                # Opasitas dihapus sesuai request
                 
             with tab_air:
                 st.write("### 🧪 Data Pemantauan Air Limbah")
@@ -438,7 +436,6 @@ elif menu == "Laporan Eco Monitoring":
     if not df_eco.empty:
         df_eco = df_eco.drop(columns=['id'], errors='ignore')
         
-        # Opasitas dihapus dari penamaan tabel
         df_eco = df_eco.rename(columns={
             'tanggal': 'Tanggal',
             'listrik': 'Listrik(kWh)',
@@ -451,7 +448,6 @@ elif menu == "Laporan Eco Monitoring":
             'limbah_non_b3': 'NonB3(kg)'
         })
         
-        # Drop kolom opasitas_asap jika masih ada di database tapi nggak mau ditampilkan
         if 'opasitas_asap' in df_eco.columns:
             df_eco = df_eco.drop(columns=['opasitas_asap'])
             
@@ -469,163 +465,3 @@ elif menu == "Laporan Eco Monitoring":
         st.warning("Tidak ada data lingkungan pada rentang tanggal tersebut.")
 
 # --- 6. CCTV SAFETY GUARD (AI) - MULTI AREA & ABNORMAL POSTURE ---
-elif menu == "CCTV Safety Guard (AI)":
-    st.title("🚨 Live CCTV K3 Detector")
-    
-    # Inisialisasi list area jika belum ada
-    if 'list_area' not in st.session_state:
-        st.session_state.list_area = ["Area Produksi 1", "Gudang Bahan Baku", "Jalur Konveyor"]
-
-    # Inisialisasi Log Anomali
-    if 'ppe_logs' not in st.session_state:
-        st.session_state.ppe_logs = []
-            
-    # FLAG UNTUK MENCEGAH SPAM WA (Gembok Utama)
-    if 'wa_sent' not in st.session_state:
-        st.session_state.wa_sent = False
-
-    # Expander Pengaturan Area
-    with st.expander("⚙️ Pengaturan Area CCTV (Tambah/Hapus)"):
-        tambah_area = st.text_input("Nama Area Baru:")
-        if st.button("Tambah Area"):
-            if tambah_area and tambah_area not in st.session_state.list_area:
-                st.session_state.list_area.append(tambah_area)
-                st.success(f"Area {tambah_area} ditambahkan!")
-                st.rerun()
-
-    pilih_area = st.selectbox("📍 Pilih Kamera Area yang Sedang Aktif:", st.session_state.list_area)
-
-    col_cam, col_status = st.columns([2, 1])
-
-    with col_cam:
-        st.subheader(f"📹 Live Feed: {pilih_area}")
-        ctx = st.empty() # Tempat render kamera
-        
-        st.write("**Panel Kontrol AI:**")
-        c1, c2 = st.columns(2)
-        with c1:
-            run_ppe = st.checkbox("▶️ ON Kamera AI")
-        with c2:
-            simulasi_abnormal = st.checkbox("⚠️ Simulasi: Postur Abnormal (Jatuh)")
-            # Slider baru untuk mengubah batas tinggi
-            batas_tinggi = st.slider("Batas Ketinggian Abnormal (cm)", min_value=10, max_value=150, value=30, step=5, help="Sesuaikan ambang batas deteksi dengan kondisi lapangan")
-
-    with col_status:
-        st.subheader("📊 Status Kinerja")
-        status_placeholder = st.empty()
-        log_placeholder = st.empty()
-
-    # --- LOGIKA JALANKAN KAMERA ---
-    if run_ppe:
-        cap = cv2.VideoCapture(0)
-        
-        # Periksa apakah kamera bisa dibuka
-        if not cap.isOpened():
-            st.error("❌ Gagal mengakses kamera. Pastikan kamera tidak dipakai aplikasi lain.")
-            run_ppe = False
-        else:
-            while run_ppe:
-                ret, frame = cap.read()
-                if not ret:
-                    st.error("Frame tidak terbaca.")
-                    break
-                
-                frame = cv2.flip(frame, 1)
-                h, w, _ = frame.shape
-                tgl_jam = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                
-                # --- VISUALISASI GARIS BATAS KETINGGIAN ---
-                # Asumsi tinggi frame (layar) mewakili 200 cm
-                batas_y = int(h - (h * (batas_tinggi / 200.0)))
-                cv2.line(frame, (0, batas_y), (w, batas_y), (0, 255, 255), 2)
-                cv2.putText(frame, f"Batas Deteksi: {batas_tinggi}cm", (10, batas_y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
-
-                # --- LOGIKA DETEKSI POSTUR ABNORMAL ---
-                if simulasi_abnormal:
-                    color = (0, 165, 255) # Oranye
-                    label = f"⚠️ ABNORMAL POSTURE (< {batas_tinggi}cm)!"
-                    status_k3 = f"🚨 PERHATIAN! Terdeteksi Pekerja Terjatuh di bawah {batas_tinggi}cm!"
-                    
-                    # Gambar Visual Box
-                    cv2.rectangle(frame, (int(w*0.2), int(h*0.7)), (int(w*0.8), int(h*0.9)), color, 3)
-                    cv2.rectangle(frame, (int(w*0.2), int(h*0.6)), (int(w*0.8), int(h*0.7)), color, -1)
-                    cv2.putText(frame, label, (int(w*0.21), int(h*0.66)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
-                    
-                    # Suara Alarm (Memasukkan logika pygame mixer)
-                    if 'alarm_sound' in globals() and alarm_sound is not None and not mixer.get_busy(): 
-                        alarm_sound.play(loops=-1) 
-                    
-                    # Update Log di UI
-                    entry_log = f"[{tgl_jam}] - {pilih_area}: Postur Abnormal (< {batas_tinggi}cm)!"
-                    if not st.session_state.ppe_logs or st.session_state.ppe_logs[0] != entry_log:
-                        st.session_state.ppe_logs.insert(0, entry_log)
-
-                    # --- BLOK EKSEKUSI KIRIM WHATSAPP (HANYA SEKALI) ---
-                    if not st.session_state.wa_sent:
-                        try:
-                            # Masukkan kredensial lu di sini
-                            acc_sid = 'ACa3a95e23d643ee4279076c697d4da8f9'
-                            token = 'e928d4e626dc6cbb45c406cc4e94d94a'
-                            client = Client(acc_sid, token)
-
-                            msg_body = f"🚨 *FACTORYGUARD ALERT* 🚨\n\nTerdeteksi Karyawan Terjatuh/Tidur (< {batas_tinggi}cm)!\nLokasi: {pilih_area}\nWaktu: {tgl_jam}\n\nSegera cek lokasi!"
-
-                            client.messages.create(
-                                from_='whatsapp:+14155238886', 
-                                body=msg_body,
-                                to='whatsapp:+6285796326920'
-                            )
-                            
-                            st.session_state.wa_sent = True 
-                            print("✅ Pesan WA Berhasil Dikirim!")
-                        except Exception as e:
-                            print(f"❌ Gagal kirim WA: {e}")
-
-                else:
-                    # KONDISI NORMAL
-                    color = (0, 255, 0) # Hijau
-                    label = "NORMAL ACTIVITY"
-                    status_k3 = "✅ Aman. Pekerja Beraktivitas Normal."
-                    
-                    cv2.rectangle(frame, (int(w*0.4), int(h*0.2)), (int(w*0.6), int(h*0.8)), color, 3)
-                    cv2.rectangle(frame, (int(w*0.4), int(h*0.1)), (int(w*0.6), int(h*0.2)), color, -1)
-                    cv2.putText(frame, label, (int(w*0.41), int(h*0.16)), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-                    
-                    if 'alarm_sound' in globals() and alarm_sound is not None:
-                        mixer.stop()
-                    
-                    # Reset gembok kalau sudah aman
-                    if st.session_state.wa_sent:
-                        st.session_state.wa_sent = False
-                        print("🔄 Gembok WA Reset (Kembali Normal).")
-
-                # Render Frame ke Streamlit
-                frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                ctx.image(frame_rgb, channels="RGB")
-                
-                # Update Status & Log di Column Kanan
-                if simulasi_abnormal:
-                    status_placeholder.error(status_k3)
-                else:
-                    status_placeholder.success(status_k3)
-                    
-                with log_placeholder.container():
-                    st.write("**📝 Log Anomali Terbaru:**")
-                    for log in st.session_state.ppe_logs[:5]: 
-                        st.caption(log)
-
-                # Cek apakah user mematikan checkbox
-                if not run_ppe:
-                    break
-            
-            cap.release()
-            if 'alarm_sound' in globals() and alarm_sound is not None:
-                mixer.stop()
-            st.rerun()
-
-    else:
-        # Tampilan jika kamera OFF
-        ctx.markdown("<div style='width:100%; height:400px; background-color:black; display:flex; align-items:center; justify-content:center; color:white; border-radius:10px;'>📹 Kamera Dimatikan</div>", unsafe_allow_html=True)
-        status_placeholder.info("Kamera standby. Aktifkan 'ON Kamera AI' untuk memulai.")
-        if 'alarm_sound' in globals() and alarm_sound is not None:
-            mixer.stop()
