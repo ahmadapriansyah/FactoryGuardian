@@ -19,15 +19,6 @@ load_dotenv()
 # --- UI SETTINGS ---
 st.set_page_config(page_title="FactoryGuard AI Pro Cloud", layout="wide")
 
-# --- INISIALISASI SUARA ALARM ---
-try:
-    mixer.init()
-    # Pastikan file 'alarm.mp3' ada di folder yang sama dengan file .py ini
-    alarm_sound = mixer.Sound("alarm.mp3") 
-except Exception as e:
-    # Error ini muncul kalau file alarm.mp3 gak ada di folder
-    alarm_sound = None
-
 # --- KONEKSI SUPABASE ---
 SUPABASE_URL = "https://cifkqcpxpskuxeksncwk.supabase.co"
 SUPABASE_KEY = "sb_publishable_GnTiR-ZJBNBFChFEHt1KhQ_CIcax-D8"
