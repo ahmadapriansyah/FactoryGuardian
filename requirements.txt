@@ -3,6 +3,7 @@ opencv-python-headless
 numpy
 pandas
 supabase
+st-supabase-connection
 fpdf
 python-dotenv
 twilio
