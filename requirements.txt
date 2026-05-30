@@ -5,3 +5,4 @@ pandas
 st-supabase-connection
 fpdf
 plotly
+.env
