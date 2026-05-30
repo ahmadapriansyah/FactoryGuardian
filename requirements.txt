@@ -6,4 +6,3 @@ supabase
 fpdf
 python-dotenv
 twilio
-pygame
