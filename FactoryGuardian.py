@@ -7,7 +7,7 @@ import os
 from st_supabase_connection import SupabaseConnection
 from fpdf import FPDF
 from datetime import datetime
-from dotenv import load_doten
+from dotenv import load_dotenv
 from twilio.rest import Client
 
 # Matikan pesan welcome pygame di terminal biar bersih
