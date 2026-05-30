@@ -498,7 +498,7 @@ elif menu == "CCTV Safety Guard (AI)":
         # --- LOGIKA DETEKSI POSTUR ABNORMAL ---
         if simulasi_abnormal:
             color = (0, 165, 255) # Oranye
-           label = f"WARNING: ABNORMAL POSTURE (< {batas_tinggi}cm)!"
+            label = f"WARNING: ABNORMAL POSTURE (< {batas_tinggi}cm)!"
             status_k3 = f"🚨 PERHATIAN! Terdeteksi Pekerja Terjatuh di bawah {batas_tinggi}cm!"
             
             cv2.rectangle(frame, (int(w*0.2), int(h*0.7)), (int(w*0.8), int(h*0.9)), color, 3)
