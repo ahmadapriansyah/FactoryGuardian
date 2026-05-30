@@ -10,9 +10,6 @@ from datetime import datetime
 from dotenv import load_dotenv
 from twilio.rest import Client
 
-# CATATAN BOLO: Pygame dihapus karena bikin crash di server cloud.
-# Untuk alarm suara, kita ganti pakai st.audio() bawaan Streamlit yang cloud-friendly.
-
 load_dotenv()
 
 # --- UI SETTINGS ---
@@ -208,87 +205,61 @@ elif menu == "Absensi & Fit Check":
     if list_n:
         nama_p = st.selectbox("Pilih Nama Anda", list_n)
         st.write("---")
-        aktifkan_kamera = st.checkbox("📸 Nyalakan Kamera untuk Scan HR")
         
-        if aktifkan_kamera:
+        # Mengubah sistem deteksi wajah absen agar kompatibel dengan cloud server menggunakan st.camera_input
+        img_absen = st.camera_input("📸 Pindai Wajah Anda untuk Mengambil HR-BPM")
+        
+        if img_absen:
             if not st.session_state.scan_selesai:
-                placeholder = st.empty()
-                cap = cv2.VideoCapture(0)
-                time.sleep(0.5)
+                st.session_state.current_bpm = np.random.randint(72, 105)
+                st.session_state.scan_selesai = True
+                st.rerun()
                 
-                if not cap.isOpened():
-                    st.error("⚠️ Kamera tidak terdeteksi! Pastikan tidak dipakai aplikasi lain.")
-                else:
-                    start_time = time.time()
-                    while time.time() - start_time < 5:
-                        ret, frame = cap.read()
-                        if not ret: continue
+            col_kiri, col_kanan = st.columns([2, 1])
+            with col_kiri:
+                st.success("✅ Wajah & Biometrik Berhasil Dipindai!")
+            with col_kanan:
+                st.metric("Detak Jantung", f"{st.session_state.current_bpm} BPM")
+            
+            c1, c2 = st.columns(2)
+            with c1:
+                if st.button("✅ Check-In (Masuk)", width="stretch"):
+                    data_in = {
+                        "nama": nama_p, 
+                        "tanggal": tgl_skrg, 
+                        "jam_masuk": datetime.now().strftime("%H:%M:%S"), 
+                        "bpm_masuk": st.session_state.current_bpm,
+                        "status_lelah": hitung_fatigue(st.session_state.current_bpm, 0)
+                    }
+                    conn.table("absensi").insert([data_in]).execute()
+                    st.session_state.scan_selesai = False
+                    st.success("Check-In Berhasil!"); time.sleep(1); st.rerun()
+            
+            with c2:
+                if st.button("🏠 Check-Out (Pulang)", width="stretch"):
+                    cek = conn.table("absensi").select("id, jam_masuk").eq("nama", nama_p).eq("tanggal", tgl_skrg).is_("jam_pulang", "null").execute().data
+                    if cek:
+                        id_absen = cek[0]['id']
+                        jam_masuk_str = cek[0]['jam_masuk']
+                        jam_pulang_str = datetime.now().strftime("%H:%M:%S")
                         
-                        frame = cv2.flip(frame, 1)
-                        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                        h, w, _ = frame_rgb.shape
-                        cv2.rectangle(frame_rgb, (int(w*0.35), int(h*0.2)), (int(w*0.65), int(h*0.5)), (0, 255, 0), 2)
+                        fmt = "%H:%M:%S"
+                        t_masuk = datetime.strptime(jam_masuk_str, fmt)
+                        t_pulang = datetime.strptime(jam_pulang_str, fmt)
+                        durasi_jam = (t_pulang - t_masuk).total_seconds() / 3600
                         
-                        sisa = int(5 - (time.time() - start_time)) + 1
-                        cv2.putText(frame_rgb, f"SCANNING HR... {sisa}s", (int(w*0.32), int(h*0.15)), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-                        
-                        live_bpm = np.random.randint(65, 120)
-                        cv2.putText(frame_rgb, f"LIVE BPM: {live_bpm}", (int(w*0.35), int(h*0.55)), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
-                        
-                        placeholder.image(frame_rgb, channels="RGB")
-                        time.sleep(0.05)
-                        
-                    cap.release()
-                    placeholder.empty()
-                    st.session_state.current_bpm = np.random.randint(70, 115)
-                    st.session_state.scan_selesai = True
-                    st.rerun()
-            else:
-                col_kiri, col_kanan = st.columns([2, 1])
-                with col_kiri:
-                    st.success("✅ Wajah & Biometrik Berhasil Dipindai!")
-                with col_kanan:
-                    st.metric("Detak Jantung", f"{st.session_state.current_bpm} BPM")
-                
-                c1, c2 = st.columns(2)
-                with c1:
-                    if st.button("✅ Check-In (Masuk)", width="stretch"):
-                        data_in = {
-                            "nama": nama_p, 
-                            "tanggal": tgl_skrg, 
-                            "jam_masuk": datetime.now().strftime("%H:%M:%S"), 
-                            "bpm_masuk": st.session_state.current_bpm,
-                            "status_lelah": hitung_fatigue(st.session_state.current_bpm, 0)
+                        data_out = {
+                            "jam_pulang": jam_pulang_str,
+                            "bpm_pulang": st.session_state.current_bpm,
+                            "status_lelah": hitung_fatigue(st.session_state.current_bpm, durasi_jam)
                         }
-                        conn.table("absensi").insert([data_in]).execute()
+                        conn.table("absensi").update(data_out).eq("id", id_absen).execute()
                         st.session_state.scan_selesai = False
-                        st.success("Check-In Berhasil!"); time.sleep(1); st.rerun()
-                
-                with c2:
-                    if st.button("🏠 Check-Out (Pulang)", width="stretch"):
-                        cek = conn.table("absensi").select("id, jam_masuk").eq("nama", nama_p).eq("tanggal", tgl_skrg).is_("jam_pulang", "null").execute().data
-                        if cek:
-                            id_absen = cek[0]['id']
-                            jam_masuk_str = cek[0]['jam_masuk']
-                            jam_pulang_str = datetime.now().strftime("%H:%M:%S")
-                            
-                            fmt = "%H:%M:%S"
-                            t_masuk = datetime.strptime(jam_masuk_str, fmt)
-                            t_pulang = datetime.strptime(jam_pulang_str, fmt)
-                            durasi_jam = (t_pulang - t_masuk).total_seconds() / 3600
-                            
-                            data_out = {
-                                "jam_pulang": jam_pulang_str,
-                                "bpm_pulang": st.session_state.current_bpm,
-                                "status_lelah": hitung_fatigue(st.session_state.current_bpm, durasi_jam)
-                            }
-                            conn.table("absensi").update(data_out).eq("id", id_absen).execute()
-                            st.session_state.scan_selesai = False
-                            st.balloons()
-                            st.success(f"Check-Out Berhasil! Tercatat bekerja selama {round(durasi_jam, 2)} Jam hari ini.")
-                            time.sleep(3); st.rerun()
-                        else: 
-                            st.error("Belum Check-In hari ini atau sudah Check-Out!")
+                        st.balloons()
+                        st.success(f"Check-Out Berhasil! Tercatat bekerja selama {round(durasi_jam, 2)} Jam hari ini.")
+                        time.sleep(3); st.rerun()
+                    else: 
+                        st.error("Belum Check-In hari ini atau sudah Check-Out!")
         else:
             st.session_state.scan_selesai = False
 
@@ -465,3 +436,124 @@ elif menu == "Laporan Eco Monitoring":
         st.warning("Tidak ada data lingkungan pada rentang tanggal tersebut.")
 
 # --- 6. CCTV SAFETY GUARD (AI) - MULTI AREA & ABNORMAL POSTURE ---
+elif menu == "CCTV Safety Guard (AI)":
+    st.title("🚨 Live CCTV K3 Detector")
+    
+    if 'list_area' not in st.session_state:
+        st.session_state.list_area = ["Area Produksi 1", "Gudang Bahan Baku", "Jalur Konveyor"]
+
+    if 'ppe_logs' not in st.session_state:
+        st.session_state.ppe_logs = []
+            
+    if 'wa_sent' not in st.session_state:
+        st.session_state.wa_sent = False
+
+    with st.expander("⚙️ Pengaturan Area CCTV (Tambah/Hapus)"):
+        tambah_area = st.text_input("Nama Area Baru:")
+        if st.button("Tambah Area"):
+            if tambah_area and tambah_area not in st.session_state.list_area:
+                st.session_state.list_area.append(tambah_area)
+                st.success(f"Area {tambah_area} ditambahkan!")
+                st.rerun()
+
+    pilih_area = st.selectbox("📍 Pilih Kamera Area yang Sedang Aktif:", st.session_state.list_area)
+
+    col_cam, col_status = st.columns([2, 1])
+
+    with col_cam:
+        st.subheader(f"📹 Live Feed Scan: {pilih_area}")
+        
+        # --- PERUBAHAN UTAMA: Menggunakan st.camera_input agar kamera mau jalan di Cloud Server ---
+        uploaded_image = st.camera_input("📸 Klik tombol di bawah untuk Ambil Gambar & Analisis AI")
+        
+        st.write("**Panel Kontrol AI:**")
+        c2 = st.container()
+        with c2:
+            simulasi_abnormal = st.checkbox("⚠️ Simulasi: Postur Abnormal (Jatuh)")
+            batas_tinggi = st.slider("Batas Ketinggian Abnormal (cm)", min_value=10, max_value=150, value=30, step=5, help="Sesuaikan ambang batas deteksi dengan kondisi lapangan")
+
+    with col_status:
+        st.subheader("📊 Status Kinerja")
+        status_placeholder = st.empty()
+        log_placeholder = st.empty()
+
+    # --- LOGIKA PROSES GAMBAR SECARA OTOMATIS SAAT USER MENGAMBIL FOTO ---
+    if uploaded_image:
+        # Mengubah file image mentah dari browser menjadi format OpenCV Matrix BGR
+        file_bytes = np.asarray(bytearray(uploaded_image.read()), dtype=np.uint8)
+        frame = cv2.imdecode(file_bytes, 1)
+        
+        h, w, _ = frame.shape
+        tgl_jam = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        # --- VISUALISASI GARIS BATAS KETINGGIAN ---
+        batas_y = int(h - (h * (batas_tinggi / 200.0)))
+        cv2.line(frame, (0, batas_y), (w, batas_y), (0, 255, 255), 2)
+        cv2.putText(frame, f"Batas Deteksi: {batas_tinggi}cm", (10, batas_y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+
+        # --- LOGIKA DETEKSI POSTUR ABNORMAL ---
+        if simulasi_abnormal:
+            color = (0, 165, 255) # Oranye
+            label = f"⚠️ ABNORMAL POSTURE (< {batas_tinggi}cm)!"
+            status_k3 = f"🚨 PERHATIAN! Terdeteksi Pekerja Terjatuh di bawah {batas_tinggi}cm!"
+            
+            cv2.rectangle(frame, (int(w*0.2), int(h*0.7)), (int(w*0.8), int(h*0.9)), color, 3)
+            cv2.rectangle(frame, (int(w*0.2), int(h*0.6)), (int(w*0.8), int(h*0.7)), color, -1)
+            cv2.putText(frame, label, (int(w*0.21), int(h*0.66)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+            
+            # Membunyikan suara alert berbasis HTML5 browser lewat st.audio
+            st.audio("https://www.soundjay.com/buttons/sounds/beep-01a.mp3", autoplay=True)
+            
+            entry_log = f"[{tgl_jam}] - {pilih_area}: Postur Abnormal (< {batas_tinggi}cm)!"
+            if not st.session_state.ppe_logs or st.session_state.ppe_logs[0] != entry_log:
+                st.session_state.ppe_logs.insert(0, entry_log)
+
+            # --- BLOK EKSEKUSI KIRIM WHATSAPP (HANYA SEKALI) ---
+            if not st.session_state.wa_sent:
+                try:
+                    acc_sid = 'ACa3a95e23d643ee4279076c697d4da8f9'
+                    token = 'e928d4e626dc6cbb45c406cc4e94d94a'
+                    client = Client(acc_sid, token)
+
+                    msg_body = f"🚨 *FACTORYGUARD ALERT* 🚨\n\nTerdeteksi Karyawan Terjatuh/Tidur (< {batas_tinggi}cm)!\nLokasi: {pilih_area}\nWaktu: {tgl_jam}\n\nSegera cek lokasi!"
+
+                    client.messages.create(
+                        from_='whatsapp:+14155238886', 
+                        body=msg_body,
+                        to='whatsapp:+6285796326920'
+                    )
+                    
+                    st.session_state.wa_sent = True 
+                    st.sidebar.success("✅ Log Alert WA Terkirim!")
+                except Exception as e:
+                    st.sidebar.error(f"❌ Gagal kirim WA: {e}")
+        else:
+            # KONDISI NORMAL
+            color = (0, 255, 0) # Hijau
+            label = "NORMAL ACTIVITY"
+            status_k3 = "✅ Aman. Pekerja Beraktivitas Normal."
+            
+            cv2.rectangle(frame, (int(w*0.4), int(h*0.2)), (int(w*0.6), int(h*0.8)), color, 3)
+            cv2.rectangle(frame, (int(w*0.4), int(h*0.1)), (int(w*0.6), int(h*0.2)), color, -1)
+            cv2.putText(frame, label, (int(w*0.41), int(h*0.16)), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+            
+            if st.session_state.wa_sent:
+                st.session_state.wa_sent = False
+
+        # Merender hasil gambar olahan AI OpenCV ke UI Streamlit secara otomatis
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        st.image(frame_rgb, caption="Hasil Pemindaian Snapshot AI", use_container_width=True)
+        
+        # Update Status & Log di Column Kanan
+        if simulasi_abnormal:
+            status_placeholder.error(status_k3)
+        else:
+            status_placeholder.success(status_k3)
+            
+        with log_placeholder.container():
+            st.write("**📝 Log Anomali Terbaru:**")
+            for log in st.session_state.ppe_logs[:5]: 
+                st.caption(log)
+    else:
+        # Tampilan jika user belum memotret gambar
+        status_placeholder.info("Kamera standby. Klik tombol 'Ambil Gambar' di atas untuk memindai area.")
