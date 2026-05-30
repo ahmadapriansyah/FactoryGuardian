@@ -7,11 +7,14 @@ import os
 from st_supabase_connection import SupabaseConnection
 from fpdf import FPDF
 from datetime import datetime
+from dotenv import load_doten
 from twilio.rest import Client
 
 # Matikan pesan welcome pygame di terminal biar bersih
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 from pygame import mixer 
+
+load_dotenv()
 
 # --- UI SETTINGS ---
 st.set_page_config(page_title="FactoryGuard AI Pro Cloud", layout="wide")
@@ -28,6 +31,8 @@ except Exception as e:
 # --- KONEKSI SUPABASE ---
 SUPABASE_URL = "https://cifkqcpxpskuxeksncwk.supabase.co"
 SUPABASE_KEY = "sb_publishable_GnTiR-ZJBNBFChFEHt1KhQ_CIcax-D8"
+TWILIO_SID = os.getenv("TWILIO_SID")
+TWILIO_TOKEN = os.getenv("TWILIO_TOKEN")
 
 conn = st.connection("supabase", type=SupabaseConnection, url=SUPABASE_URL, key=SUPABASE_KEY)
 
