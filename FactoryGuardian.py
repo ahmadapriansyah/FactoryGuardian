@@ -14,15 +14,19 @@ load_dotenv()
 
 # --- UI SETTINGS ---
 st.set_page_config(page_title="FactoryGuard AI Pro Cloud", layout="wide")
-
-# --- KONEKSI SUPABASE ---
+# --- KONEKSI SUPABASE & TWILIO ---
 SUPABASE_URL = "https://cifkqcpxpskuxeksncwk.supabase.co"
 SUPABASE_KEY = "sb_publishable_GnTiR-ZJBNBFChFEHt1KhQ_CIcax-D8"
-TWILIO_SID = os.getenv("TWILIO_SID")
-TWILIO_TOKEN = os.getenv("TWILIO_TOKEN")
+
+# Coba ambil dari Streamlit Secrets dulu (kalau di Cloud), kalau gagal baru ambil dari lokal (.env)
+try:
+    TWILIO_SID = st.secrets["TWILIO_SID"]
+    TWILIO_TOKEN = st.secrets["TWILIO_TOKEN"]
+except:
+    TWILIO_SID = os.getenv("TWILIO_SID")
+    TWILIO_TOKEN = os.getenv("TWILIO_TOKEN")
 
 conn = st.connection("supabase", type=SupabaseConnection, url=SUPABASE_URL, key=SUPABASE_KEY)
-
 # --- FUNGSI ANALITIK & PERHITUNGAN ---
 def hitung_fatigue(bpm, jam_kerja):
     if jam_kerja > 8 and bpm > 100:
