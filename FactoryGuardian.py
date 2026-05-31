@@ -28,6 +28,7 @@ except:
     TWILIO_TOKEN = os.getenv("TWILIO_TOKEN")
 
 conn = st.connection("supabase", type=SupabaseConnection, url=SUPABASE_URL, key=SUPABASE_KEY)
+supabase_native = create_client(SUPABASE_URL, SUPABASE_KEY)
 # --- FUNGSI ANALITIK & PERHITUNGAN ---
 def hitung_fatigue(bpm, jam_kerja):
     if jam_kerja > 8 and bpm > 100:
