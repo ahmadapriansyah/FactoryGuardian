@@ -513,27 +513,30 @@ elif menu == "CCTV Safety Guard (AI)":
             entry_log = f"[{tgl_jam}] - {pilih_area}: Postur Abnormal (< {batas_tinggi}cm)!"
             if not st.session_state.ppe_logs or st.session_state.ppe_logs[0] != entry_log:
                 st.session_state.ppe_logs.insert(0, entry_log)
-
-      # --- BLOK EKSEKUSI KIRIM WHATSAPP & UPLOAD SUPABASE (OTOMATIS) ---
+# --- BLOK EKSEKUSI UPLOAD SUPABASE & KIRIM WHATSAPP ---
             if not st.session_state.wa_sent:
                 try:
-                    # 1. Simpan frame jadi file gambar di background laptop lu sejenak
+                    # 1. Simpan frame jadi file gambar di background laptop
                     filename_aman = tgl_jam.replace(":", "-").replace(" ", "_")
                     nama_file = f"bukti_{filename_aman}.jpg"
                     cv2.imwrite(nama_file, frame)
                     
                     # 2. OTOMATIS Upload ke Supabase Bucket "bukti-kejadian"
                     with open(nama_file, "rb") as f:
-                        supabase_native.storage.from_("bukti-kejadian").upload(file=f, path=nama_file, file_options={"content-type": "image/jpeg"})
+                        supabase_native.storage.from_("bukti-kejadian").upload(
+                            file=f, 
+                            path=nama_file, 
+                            file_options={"content-type": "image/jpeg"}
+                        )
                     
-                    # 3. OTOMATIS Ambil Link URL Fotonya dari Cloud
+                    # 3. OTOMATIS Ambil Link URL Fotonya dari Cloud Supabase
                     link_foto = supabase_native.storage.from_("bukti-kejadian").get_public_url(nama_file)
                     
                     # 4. Hapus foto dari laptop biar rapi
                     if os.path.exists(nama_file):
                         os.remove(nama_file)
 
-                    # 5. OTOMATIS Kirim WA ke Bos bawa fotonya
+                    # 5. KODINGAN WA TETAP ADA: Kirim WA ke Bos bawa foto dari Supabase
                     client = Client(TWILIO_SID, TWILIO_TOKEN)
 
                     msg_body = f"🚨 *FACTORYGUARD ALERT* 🚨\n\nTerdeteksi Karyawan Terjatuh/Tidur (< {batas_tinggi}cm)!\nLokasi: {pilih_area}\nWaktu: {tgl_jam}\n\nSistem telah mengunggah bukti gambar secara otomatis."
@@ -546,7 +549,7 @@ elif menu == "CCTV Safety Guard (AI)":
                     )
                     
                     st.session_state.wa_sent = True 
-                    st.sidebar.success("✅ Bukti terupload ke Supabase & WA Terkirim!")
+                    st.sidebar.success("✅ Bukti terupload ke Supabase & WA Terkirim ke Bos!")
                 except Exception as e:
                     st.sidebar.error(f"❌ Gagal sistem Cloud/WA: {e}")
         else:
