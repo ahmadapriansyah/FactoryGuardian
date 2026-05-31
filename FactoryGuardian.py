@@ -514,24 +514,41 @@ elif menu == "CCTV Safety Guard (AI)":
             if not st.session_state.ppe_logs or st.session_state.ppe_logs[0] != entry_log:
                 st.session_state.ppe_logs.insert(0, entry_log)
 
-        # --- BLOK EKSEKUSI KIRIM WHATSAPP (HANYA SEKALI) ---
+      # --- BLOK EKSEKUSI KIRIM WHATSAPP & UPLOAD SUPABASE (OTOMATIS) ---
             if not st.session_state.wa_sent:
                 try:
-                    # Langsung pakai variabel dari st.secrets di atas!
+                    # 1. Simpan frame jadi file gambar di background laptop lu sejenak
+                    filename_aman = tgl_jam.replace(":", "-").replace(" ", "_")
+                    nama_file = f"bukti_{filename_aman}.jpg"
+                    cv2.imwrite(nama_file, frame)
+                    
+                    # 2. OTOMATIS Upload ke Supabase Bucket "bukti-kejadian"
+                    with open(nama_file, "rb") as f:
+                        supabase_native.storage.from_("bukti-kejadian").upload(file=f, path=nama_file, file_options={"content-type": "image/jpeg"})
+                    
+                    # 3. OTOMATIS Ambil Link URL Fotonya dari Cloud
+                    link_foto = supabase_native.storage.from_("bukti-kejadian").get_public_url(nama_file)
+                    
+                    # 4. Hapus foto dari laptop biar rapi
+                    if os.path.exists(nama_file):
+                        os.remove(nama_file)
+
+                    # 5. OTOMATIS Kirim WA ke Bos bawa fotonya
                     client = Client(TWILIO_SID, TWILIO_TOKEN)
 
-                    msg_body = f"🚨 *FACTORYGUARD ALERT* 🚨\n\nTerdeteksi Karyawan Terjatuh/Tidur (< {batas_tinggi}cm)!\nLokasi: {pilih_area}\nWaktu: {tgl_jam}\n\nSegera cek lokasi!"
+                    msg_body = f"🚨 *FACTORYGUARD ALERT* 🚨\n\nTerdeteksi Karyawan Terjatuh/Tidur (< {batas_tinggi}cm)!\nLokasi: {pilih_area}\nWaktu: {tgl_jam}\n\nSistem telah mengunggah bukti gambar secara otomatis."
 
                     client.messages.create(
                         from_='whatsapp:+14155238886', 
                         body=msg_body,
+                        media_url=[link_foto], # <--- FOTO DARI SUPABASE DIKIRIM KE SINI
                         to='whatsapp:+6285796326920'
                     )
                     
                     st.session_state.wa_sent = True 
-                    st.sidebar.success("✅ Log Alert WA Terkirim!")
+                    st.sidebar.success("✅ Bukti terupload ke Supabase & WA Terkirim!")
                 except Exception as e:
-                    st.sidebar.error(f"❌ Gagal kirim WA: {e}")
+                    st.sidebar.error(f"❌ Gagal sistem Cloud/WA: {e}")
         else:
             # KONDISI NORMAL
             color = (0, 255, 0) # Hijau
