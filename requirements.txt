@@ -7,3 +7,4 @@ st-supabase-connection
 fpdf
 python-dotenv
 twilio
+pytz
