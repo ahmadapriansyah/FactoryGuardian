@@ -5,16 +5,22 @@ import numpy as np
 import time
 import pandas as pd
 import os
+import base64
 from st_supabase_connection import SupabaseConnection
 from fpdf import FPDF
 from datetime import datetime
+import pytz
 from dotenv import load_dotenv
 from twilio.rest import Client
 
 load_dotenv()
 
+# --- SETUP ZONA WAKTU INDONESIA ---
+tz_indo = pytz.timezone('Asia/Jakarta')
+
 # --- UI SETTINGS ---
 st.set_page_config(page_title="FactoryGuard AI Pro Cloud", layout="wide")
+
 # --- KONEKSI SUPABASE & TWILIO ---
 SUPABASE_URL = "https://cifkqcpxpskuxeksncwk.supabase.co"
 SUPABASE_KEY = "sb_publishable_GnTiR-ZJBNBFChFEHt1KhQ_CIcax-D8"
@@ -29,6 +35,22 @@ except:
 
 conn = st.connection("supabase", type=SupabaseConnection, url=SUPABASE_URL, key=SUPABASE_KEY)
 supabase_native = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# --- FUNGSI ALARM LOKAL ---
+def bunyikan_alarm(file_audio):
+    try:
+        with open(file_audio, "rb") as f:
+            data = f.read()
+        b64 = base64.b64encode(data).decode()
+        md = f"""
+            <audio autoplay="true">
+            <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
+            </audio>
+            """
+        st.markdown(md, unsafe_allow_html=True)
+    except Exception as e:
+        st.error(f"Gagal memutar suara, pastikan file {file_audio} ada di folder yang sama!")
+
 # --- FUNGSI ANALITIK & PERHITUNGAN ---
 def hitung_fatigue(bpm, jam_kerja):
     if jam_kerja > 8 and bpm > 100:
@@ -41,7 +63,7 @@ def estimasi_biaya(listrik, solar):
     return (listrik * 1500) + (solar * 13000)
 
 def export_to_pdf(data, title):
-    pdf = FPDF(orientation='L') # Landscape biar lebar
+    pdf = FPDF(orientation='L')
     pdf.add_page()
     pdf.set_font("Arial", 'B', 14)
     
@@ -119,7 +141,7 @@ if menu == "Dashboard Performance":
         df_emisi, df_absensi, total_karyawan = pd.DataFrame(), pd.DataFrame(), 0
 
     # --- ROW 1: HR & ABSENSI ---
-    tgl_skrg = datetime.now().strftime("%Y-%m-%d")
+    tgl_skrg = datetime.now(tz_indo).strftime("%Y-%m-%d")
     hadir_hari_ini = len(df_absensi[df_absensi['tanggal'] == tgl_skrg]) if not df_absensi.empty else 0
     bolos_hari_ini = max(total_karyawan - hadir_hari_ini, 0)
 
@@ -190,7 +212,7 @@ if menu == "Dashboard Performance":
 # --- 2. ABSENSI & FIT CHECK ---
 elif menu == "Absensi & Fit Check":
     st.title("❤️ Presensi & Health Scan")
-    tgl_skrg = datetime.now().strftime("%Y-%m-%d")
+    tgl_skrg = datetime.now(tz_indo).strftime("%Y-%m-%d")
     
     with st.expander("👤 Management Karyawan (Tambah Baru)"):
         nama_baru = st.text_input("Nama Karyawan Baru")
@@ -212,7 +234,6 @@ elif menu == "Absensi & Fit Check":
         nama_p = st.selectbox("Pilih Nama Anda", list_n)
         st.write("---")
         
-        # Mengubah sistem deteksi wajah absen agar kompatibel dengan cloud server menggunakan st.camera_input
         img_absen = st.camera_input("📸 Pindai Wajah Anda untuk Mengambil HR-BPM")
         
         if img_absen:
@@ -233,7 +254,7 @@ elif menu == "Absensi & Fit Check":
                     data_in = {
                         "nama": nama_p, 
                         "tanggal": tgl_skrg, 
-                        "jam_masuk": datetime.now().strftime("%H:%M:%S"), 
+                        "jam_masuk": datetime.now(tz_indo).strftime("%H:%M:%S"), 
                         "bpm_masuk": st.session_state.current_bpm,
                         "status_lelah": hitung_fatigue(st.session_state.current_bpm, 0)
                     }
@@ -247,7 +268,7 @@ elif menu == "Absensi & Fit Check":
                     if cek:
                         id_absen = cek[0]['id']
                         jam_masuk_str = cek[0]['jam_masuk']
-                        jam_pulang_str = datetime.now().strftime("%H:%M:%S")
+                        jam_pulang_str = datetime.now(tz_indo).strftime("%H:%M:%S")
                         
                         fmt = "%H:%M:%S"
                         t_masuk = datetime.strptime(jam_masuk_str, fmt)
@@ -297,7 +318,7 @@ elif menu == "Eco Monitoring":
             
         st.write("---")
         
-        tgl_hari_ini = datetime.now().strftime("%Y-%m-%d")
+        tgl_hari_ini = datetime.now(tz_indo).strftime("%Y-%m-%d")
         try:
             cek_data = conn.table("emisi").select("*").eq("tanggal", tgl_hari_ini).execute().data
             data_hari_ini = cek_data[0] if cek_data else {}
@@ -373,9 +394,9 @@ elif menu == "Laporan Absensi":
     
     col1, col2 = st.columns(2)
     with col1:
-        mulai_tgl = st.date_input("Dari Tanggal", pd.to_datetime(datetime.now().date()) - pd.Timedelta(days=7))
+        mulai_tgl = st.date_input("Dari Tanggal", pd.to_datetime(datetime.now(tz_indo).date()) - pd.Timedelta(days=7))
     with col2:
-        akhir_tgl = st.date_input("Sampai Tanggal", pd.to_datetime(datetime.now().date()))
+        akhir_tgl = st.date_input("Sampai Tanggal", pd.to_datetime(datetime.now(tz_indo).date()))
 
     absen_data = conn.table("absensi").select("*").gte("tanggal", str(mulai_tgl)).lte("tanggal", str(akhir_tgl)).execute().data
     df_absen = pd.DataFrame(absen_data) if absen_data else pd.DataFrame()
@@ -402,9 +423,9 @@ elif menu == "Laporan Eco Monitoring":
     
     col1, col2 = st.columns(2)
     with col1:
-        mulai_tgl_eco = st.date_input("Dari Tanggal ", pd.to_datetime(datetime.now().date()) - pd.Timedelta(days=30))
+        mulai_tgl_eco = st.date_input("Dari Tanggal ", pd.to_datetime(datetime.now(tz_indo).date()) - pd.Timedelta(days=30))
     with col2:
-        akhir_tgl_eco = st.date_input("Sampai Tanggal ", pd.to_datetime(datetime.now().date()))
+        akhir_tgl_eco = st.date_input("Sampai Tanggal ", pd.to_datetime(datetime.now(tz_indo).date()))
 
     with st.spinner("Menarik data lingkungan..."):
         eco_data = conn.table("emisi").select("*").gte("tanggal", str(mulai_tgl_eco)).lte("tanggal", str(akhir_tgl_eco)).execute().data
@@ -469,7 +490,6 @@ elif menu == "CCTV Safety Guard (AI)":
     with col_cam:
         st.subheader(f"📹 Live Feed Scan: {pilih_area}")
         
-        # --- PERUBAHAN UTAMA: Menggunakan st.camera_input agar kamera mau jalan di Cloud Server ---
         uploaded_image = st.camera_input("📸 Klik tombol di bawah untuk Ambil Gambar & Analisis AI")
         
         st.write("**Panel Kontrol AI:**")
@@ -483,23 +503,19 @@ elif menu == "CCTV Safety Guard (AI)":
         status_placeholder = st.empty()
         log_placeholder = st.empty()
 
-    # --- LOGIKA PROSES GAMBAR SECARA OTOMATIS SAAT USER MENGAMBIL FOTO ---
     if uploaded_image:
-        # Mengubah file image mentah dari browser menjadi format OpenCV Matrix BGR
         file_bytes = np.asarray(bytearray(uploaded_image.read()), dtype=np.uint8)
         frame = cv2.imdecode(file_bytes, 1)
         
         h, w, _ = frame.shape
-        tgl_jam = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        tgl_jam = datetime.now(tz_indo).strftime("%Y-%m-%d %H:%M:%S")
         
-        # --- VISUALISASI GARIS BATAS KETINGGIAN ---
         batas_y = int(h - (h * (batas_tinggi / 200.0)))
         cv2.line(frame, (0, batas_y), (w, batas_y), (0, 255, 255), 2)
         cv2.putText(frame, f"Batas Deteksi: {batas_tinggi}cm", (10, batas_y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
 
-        # --- LOGIKA DETEKSI POSTUR ABNORMAL ---
         if simulasi_abnormal:
-            color = (0, 165, 255) # Oranye
+            color = (0, 165, 255) 
             label = f"WARNING: ABNORMAL POSTURE (< {batas_tinggi}cm)!"
             status_k3 = f"🚨 PERHATIAN! Terdeteksi Pekerja Terjatuh di bawah {batas_tinggi}cm!"
             
@@ -507,54 +523,46 @@ elif menu == "CCTV Safety Guard (AI)":
             cv2.rectangle(frame, (int(w*0.2), int(h*0.6)), (int(w*0.8), int(h*0.7)), color, -1)
             cv2.putText(frame, label, (int(w*0.21), int(h*0.66)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
             
-            # Membunyikan suara alert berbasis HTML5 browser lewat st.audio
-            st.audio("https://www.soundjay.com/buttons/sounds/beep-01a.mp3", autoplay=True)
+            bunyikan_alarm("alarm.mp3")
             
             entry_log = f"[{tgl_jam}] - {pilih_area}: Postur Abnormal (< {batas_tinggi}cm)!"
             if not st.session_state.ppe_logs or st.session_state.ppe_logs[0] != entry_log:
                 st.session_state.ppe_logs.insert(0, entry_log)
-# --- BLOK EKSEKUSI UPLOAD SUPABASE & KIRIM WHATSAPP ---
+                
             if not st.session_state.wa_sent:
-                try:
-                    # 1. Simpan frame jadi file gambar di background laptop
-                    filename_aman = tgl_jam.replace(":", "-").replace(" ", "_")
-                    nama_file = f"bukti_{filename_aman}.jpg"
-                    cv2.imwrite(nama_file, frame)
-                    
-                    # 2. OTOMATIS Upload ke Supabase Bucket "bukti-kejadian"
-                    with open(nama_file, "rb") as f:
-                        supabase_native.storage.from_("bukti-kejadian").upload(
-                            file=f, 
-                            path=nama_file, 
-                            file_options={"content-type": "image/jpeg"}
+                with st.spinner("⏳ Sedang memproses... Mengunggah bukti ke Cloud & mengirim WhatsApp Alert..."):
+                    try:
+                        filename_aman = tgl_jam.replace(":", "-").replace(" ", "_")
+                        nama_file = f"bukti_{filename_aman}.jpg"
+                        cv2.imwrite(nama_file, frame)
+                        
+                        with open(nama_file, "rb") as f:
+                            supabase_native.storage.from_("bukti-kejadian").upload(
+                                file=f, 
+                                path=nama_file, 
+                                file_options={"content-type": "image/jpeg"}
+                            )
+                        
+                        link_foto = supabase_native.storage.from_("bukti-kejadian").get_public_url(nama_file)
+                        
+                        if os.path.exists(nama_file):
+                            os.remove(nama_file)
+
+                        client = Client(TWILIO_SID, TWILIO_TOKEN)
+                        msg_body = f"🚨 *FACTORYGUARD ALERT* 🚨\n\nTerdeteksi Karyawan Terjatuh/Tidur (< {batas_tinggi}cm)!\nLokasi: {pilih_area}\nWaktu: {tgl_jam}\n\nSistem telah mengunggah bukti gambar secara otomatis."
+                        client.messages.create(
+                            from_='whatsapp:+14155238886', 
+                            body=msg_body,
+                            media_url=[link_foto],
+                            to='whatsapp:+6285796326920'
                         )
-                    
-                    # 3. OTOMATIS Ambil Link URL Fotonya dari Cloud Supabase
-                    link_foto = supabase_native.storage.from_("bukti-kejadian").get_public_url(nama_file)
-                    
-                    # 4. Hapus foto dari laptop biar rapi
-                    if os.path.exists(nama_file):
-                        os.remove(nama_file)
-
-                    # 5. KODINGAN WA TETAP ADA: Kirim WA ke Bos bawa foto dari Supabase
-                    client = Client(TWILIO_SID, TWILIO_TOKEN)
-
-                    msg_body = f"🚨 *FACTORYGUARD ALERT* 🚨\n\nTerdeteksi Karyawan Terjatuh/Tidur (< {batas_tinggi}cm)!\nLokasi: {pilih_area}\nWaktu: {tgl_jam}\n\nSistem telah mengunggah bukti gambar secara otomatis."
-
-                    client.messages.create(
-                        from_='whatsapp:+14155238886', 
-                        body=msg_body,
-                        media_url=[link_foto], # <--- FOTO DARI SUPABASE DIKIRIM KE SINI
-                        to='whatsapp:+6285796326920'
-                    )
-                    
-                    st.session_state.wa_sent = True 
-                    st.sidebar.success("✅ Bukti terupload ke Supabase & WA Terkirim ke Bos!")
-                except Exception as e:
-                    st.sidebar.error(f"❌ Gagal sistem Cloud/WA: {e}")
+                        
+                        st.session_state.wa_sent = True 
+                        st.sidebar.success("✅ Bukti terupload ke Supabase & WA Terkirim!")
+                    except Exception as e:
+                        st.sidebar.error(f"❌ Gagal sistem Cloud/WA: {e}")
         else:
-            # KONDISI NORMAL
-            color = (0, 255, 0) # Hijau
+            color = (0, 255, 0)
             label = "NORMAL ACTIVITY"
             status_k3 = "✅ Aman. Pekerja Beraktivitas Normal."
             
@@ -565,11 +573,9 @@ elif menu == "CCTV Safety Guard (AI)":
             if st.session_state.wa_sent:
                 st.session_state.wa_sent = False
 
-        # Merender hasil gambar olahan AI OpenCV ke UI Streamlit secara otomatis
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        st.image(frame_rgb, caption="Hasil Pemindaian Snapshot AI", use_container_width=True)
+        st.image(frame_rgb, caption="Hasil Pemindaian Snapshot AI", width="stretch")
         
-        # Update Status & Log di Column Kanan
         if simulasi_abnormal:
             status_placeholder.error(status_k3)
         else:
@@ -580,5 +586,4 @@ elif menu == "CCTV Safety Guard (AI)":
             for log in st.session_state.ppe_logs[:5]: 
                 st.caption(log)
     else:
-        # Tampilan jika user belum memotret gambar
         status_placeholder.info("Kamera standby. Klik tombol 'Ambil Gambar' di atas untuk memindai area.")
